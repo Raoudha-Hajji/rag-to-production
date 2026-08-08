@@ -42,6 +42,7 @@ def fetch_arxiv_papers(query: str, max_results: int = 300, category: str = "cs.C
                 "title": entry.title.replace("\n", " ").strip(),
                 "abstract": entry.summary.replace("\n", " ").strip(),
                 "authors": [author.name for author in entry.authors],
+                "published": entry.published,
                 "url": entry.id,
                 "category": category,
             })
