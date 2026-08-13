@@ -8,11 +8,16 @@ import chromadb
 from sentence_transformers import SentenceTransformer
 import feedparser
 import urllib.parse
+import os
 
 #Loading the models once
 _embed_model = SentenceTransformer("all-MiniLM-L6-v2")
-_client = chromadb.PersistentClient(path="data/chroma_db")
 _collection = _client.get_collection(name="arxiv_papers")
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+
+_CHROMA_PATH = os.path.join(_THIS_DIR, "..", "data", "chroma_db")
+
+_client = chromadb.PersistentClient(path=_CHROMA_PATH)
 
 def search_papers(query: str, n_results: int = 5, max_distance: float = 1.0) -> str:
     """
