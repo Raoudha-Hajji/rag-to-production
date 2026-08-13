@@ -14,10 +14,10 @@ _embed_model = SentenceTransformer("all-MiniLM-L6-v2")
 _client = chromadb.PersistentClient(path="data/chroma_db")
 _collection = _client.get_collection(name="arxiv_papers")
 
-def search_papers(query: str, n_results: int = 5) -> str:
+def search_papers(query: str, n_results: int = 5, max_distance: float = 1.0) -> str:
     """
     Searches the papers we indexed.
-    Limited search.
+    Limited search. Filters out weak/irrelevant matches by distance.
     """
     query_embedding = _embed_model.encode([query]).tolist()
     results = _collection.query(
@@ -30,18 +30,24 @@ def search_papers(query: str, n_results: int = 5) -> str:
 
     output = []
 
-    for doc, meta in zip(
+    for doc, meta, distance in zip(
         results["documents"][0],
         results["metadatas"][0],
+        results["distances"][0],
     ):
-        authors = meta.get("authors", "Unknown authors")
+        if distance > max_distance:
+            continue  # skip weak matches
 
+        authors = meta.get("authors", "Unknown authors")
         output.append(
             f"Title: {meta['title']}\n"
             f"Authors: {authors}\n"
             f"URL: {meta['url']}\n"
             f"Abstract: {doc[:300]}..."
         )
+
+    if not output:
+        return "No relevant papers found in the local index."
 
     return "\n\n".join(output)
 
@@ -54,7 +60,7 @@ def search_arxiv_live(query: str, max_results: int = 5) -> str:
         "search_query": f"all:{query}",
         "start": 0,
         "max_results": max_results,
-        "sortBy": "submittedDate",
+        "sortBy": "relevance",
         "sortOrder": "descending",
     }
 
