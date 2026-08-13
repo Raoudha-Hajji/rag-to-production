@@ -1,4 +1,4 @@
-﻿data/
+﻿data/papers.json
 venv/
 __pycache__/
 *.pyc
