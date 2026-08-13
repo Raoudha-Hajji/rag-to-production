@@ -76,15 +76,69 @@ AI/NLP papers using the tools available to you.
 
 Rules:
 - Always use a tool to find real papers before answering factual questions.
-  Never invent paper titles, authors, or findings.
+- Never invent paper titles, authors, findings, or URLs.
 - Try `search_papers` (the local index) first, since it's faster.
 - If the local results are insufficient, outdated, or off-topic for the
   question, call `search_arxiv_live` to search more broadly.
-- Cite paper titles and URLs in your final answer so the user can verify.
+- Base your answer only on information found in the retrieved papers.
+- Do not invent citations or URLs.
+- Answer clearly and concisely.
 - If after searching you still can't find a good answer, say so honestly
   instead of guessing.
 """
 
+def extract_sources(tool_result: str):
+    """
+    Extract paper title, authors, and URL from a tool result.
+    """
+
+    sources = []
+
+    blocks = tool_result.split("\n\n")
+
+    for block in blocks:
+        title = None
+        authors = None
+        url = None
+
+        for line in block.splitlines():
+
+            if line.startswith("Title: "):
+                title = line.replace("Title: ", "", 1).strip()
+
+            elif line.startswith("Authors: "):
+                authors = line.replace("Authors: ", "", 1).strip()
+
+            elif line.startswith("URL: "):
+                url = line.replace("URL: ", "", 1).strip()
+
+        if title and url:
+            sources.append(
+                {
+                    "title": title,
+                    "authors": authors or "Unknown authors",
+                    "url": url,
+                }
+            )
+
+    return sources
+
+def deduplicate_sources(sources):
+    """
+    Remove duplicate papers using their URL.
+    """
+
+    unique_sources = []
+    seen_urls = set()
+
+    for source in sources:
+        url = source["url"]
+
+        if url not in seen_urls:
+            seen_urls.add(url)
+            unique_sources.append(source)
+
+    return unique_sources
 
 def run_agent(user_question: str, max_turns: int = 5, verbose: bool = True):
     """
@@ -95,6 +149,8 @@ def run_agent(user_question: str, max_turns: int = 5, verbose: bool = True):
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_question},
     ]
+
+    sources = []
 
     for turn in range(max_turns):
         # Retry loop: Groq's models occasionally produce malformed tool
@@ -118,7 +174,8 @@ def run_agent(user_question: str, max_turns: int = 5, verbose: bool = True):
                     print(f"[Retry {attempt + 1}/3] Tool call generation failed: {e}")
 
         if response is None:
-            return f"Agent failed after retries: {last_error}"
+            return (
+    f"Agent failed after retries: {last_error}", deduplicate_sources(sources),)
 
         message = response.choices[0].message
 
@@ -130,17 +187,34 @@ def run_agent(user_question: str, max_turns: int = 5, verbose: bool = True):
             messages.append(message)
 
             for tool_call in message.tool_calls:
+
                 tool_name = tool_call.function.name
-                tool_args = json.loads(tool_call.function.arguments)
+
+                tool_args = json.loads(
+                    tool_call.function.arguments
+                )
 
                 if verbose:
-                    print(f"\n[Agent Turn {turn + 1}] Calling tool: {tool_name}({tool_args})")
+                    print(
+                        f"\n[Agent Turn {turn + 1}] "
+                        f"Calling tool: {tool_name}({tool_args})"
+                    )
 
+                # Get actual Python function
                 tool_function = AVAILABLE_TOOLS[tool_name]
+
+                # Execute tool
                 tool_result = tool_function(**tool_args)
 
                 if verbose:
-                    print(f"[Tool Result Preview] {tool_result[:150]}...")
+                    print(
+                        f"[Tool Result Preview] "
+                        f"{tool_result[:150]}..."
+                    )
+
+                found_sources = extract_sources(tool_result)
+
+                sources.extend(found_sources)
 
                 # Feed the tool's output back into the conversation so the
                 # model can see it and decide what to do next.
@@ -157,14 +231,39 @@ def run_agent(user_question: str, max_turns: int = 5, verbose: bool = True):
         # Case 2: the model gave a final text answer, no more tools needed
         else:
             if verbose:
-                print(f"\n[Agent finished after {turn + 1} turn(s)]")
-            return message.content
+                print(
+                    f"\n[Agent finished after "
+                    f"{turn + 1} turn(s)]")
 
-    return "Agent stopped: reached max turns without a final answer."
+                # Remove duplicate papers
+            sources = deduplicate_sources(sources)
+
+            return message.content, sources
+
+    #Max turns reached
+    sources = deduplicate_sources(sources)
+
+    return (
+        "Agent stopped: reached max turns without a final answer.",
+        sources,
+     )
+
 
 
 if __name__ == "__main__":
-    question = "What are common approaches for combining retrieval with LLM agents?"
-    answer = run_agent(question)
+
+    question = (
+        "What are common approaches for combining "
+        "retrieval with LLM agents?"
+    )
+
+    answer, sources = run_agent(question)
+
     print("\n=== FINAL ANSWER ===")
     print(answer)
+
+    print("\n=== SOURCES ===")
+
+    for i, source in enumerate(sources, 1):
+        print(f"[{i}] {source['title']}")
+        print(f"    {source['url']}")

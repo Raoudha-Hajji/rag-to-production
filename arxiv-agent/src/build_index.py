@@ -12,10 +12,6 @@ DATA_PATH = "data/papers.json"
 CHROMA_PATH = "data/chroma_db"
 COLLECTION_NAME = "arxiv_papers"
 
-DATA_PATH = "data/papers.json"
-CHROMA_PATH = "data/chroma_db"
-COLLECTION_NAME = "arxiv_papers"
-
 def load_papers(path: str):
     with open(path, "r") as f:
         return json.load(f)

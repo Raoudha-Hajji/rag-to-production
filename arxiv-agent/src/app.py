@@ -1,40 +1,112 @@
 """
 Demo interface for the arXiv agent.
 
-> streamlit run src/app.py
+Run:
+    streamlit run src/app.py
 """
 
 import streamlit as st
 from agent import run_agent
 
-st.set_page_config(page_title="ArXiv Research Agent", page_icon="🔎", layout="centered")
 
-st.title("🔎 ArXiv Research Agent")
-st.caption(
-    "An agentic RAG assistant that answers questions about AI/NLP research. "
-    "It searches a local indexed paper collection first, and falls back to "
-    "live arXiv search when needed."
+st.set_page_config(
+    page_title="ArXiv Research Agent",
+    page_icon="🔎",
+    layout="wide",
 )
 
-# st.session_state persists values across reruns — Streamlit reruns the
-# whole script on every interaction, so without this, chat history would
-# reset every time you ask a new question.
+
 if "history" not in st.session_state:
     st.session_state.history = []
 
-question = st.text_input("Ask a question about AI/NLP research:")
 
-col1, col2 = st.columns([1, 5])
-with col1:
-    ask_clicked = st.button("Ask", type="primary")
+with st.sidebar:
+    st.header("🔎 ArXiv Research Agent")
 
-if ask_clicked and question:
-    with st.spinner("Thinking... (the agent may search papers, this can take a few seconds)"):
-        answer = run_agent(question, verbose=False)
-    st.session_state.history.insert(0, {"question": question, "answer": answer})
+    st.markdown(
+        """
+        An agentic RAG assistant for AI/NLP research.
 
-# Display conversation history, most recent first
-for entry in st.session_state.history:
-    st.markdown(f"**Q: {entry['question']}**")
-    st.markdown(entry["answer"])
+        **How it works**
+        - Searches the local paper collection
+        - Uses semantic retrieval
+        - Falls back to live arXiv search
+        - Generates an answer based on retrieved papers
+        """
+    )
+
     st.divider()
+
+    if st.button("🗑️ Clear conversation", use_container_width=True):
+        st.session_state.history = []
+        st.rerun()
+
+
+st.title("🔎 ArXiv Research Agent")
+
+st.caption(
+    "Ask questions about AI and NLP research. "
+    "The agent searches your indexed papers first and "
+    "uses live arXiv search when needed."
+)
+
+
+for entry in st.session_state.history:
+
+    with st.chat_message("user", avatar="👤"):
+        st.write(entry["question"])
+
+    with st.chat_message("assistant", avatar="🔎"):
+
+        st.markdown(entry["answer"])
+
+        if entry.get("sources"):
+            with st.expander(
+                f"📚 Sources ({len(entry['sources'])})"
+            ):
+                for i, source in enumerate(entry["sources"], 1):
+                    st.markdown(
+                        f"**[{i}] [{source['title']}]({source['url']})**  \n"
+                        f"<small>{source.get('authors', 'Unknown authors')}</small>",
+                        unsafe_allow_html=True,
+                    )
+
+
+question = st.chat_input(
+    "Ask a question about AI/NLP research..."
+)
+
+
+if question:
+
+    with st.chat_message("user", avatar="👤"):
+        st.write(question)
+
+    with st.chat_message("assistant", avatar="🔎"):
+
+        with st.spinner("Searching papers and generating an answer..."):
+            answer, sources = run_agent(
+                question,
+                verbose=False,
+            )
+
+        st.markdown(answer)
+
+        if sources:
+            with st.expander(
+                f"📚 Sources ({len(sources)})"
+            ):
+                for i, source in enumerate(sources, 1):
+                    st.markdown(
+                        f"**[{i}] [{source['title']}]({source['url']})**  \n"
+                        f"<small>{source.get('authors', 'Unknown authors')}</small>",
+                        unsafe_allow_html=True,
+                    )
+
+    st.session_state.history.append(
+        {
+            "question": question,
+            "answer": answer,
+            "sources": sources,
+        }
+    )
