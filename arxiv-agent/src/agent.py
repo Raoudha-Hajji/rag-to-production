@@ -17,7 +17,16 @@ from tools import AVAILABLE_TOOLS, _embed_model
 
 load_dotenv()
 
-client = Groq(api_key=os.environ["GROQ_API_KEY"])
+groq_api_key = os.environ.get("GROQ_API_KEY")
+
+if not groq_api_key:
+    try:
+        import streamlit as st
+        groq_api_key = st.secrets.get("GROQ_API_KEY")
+    except Exception:
+        pass
+
+client = Groq(api_key=groq_api_key)
 
 MODEL = "llama-3.1-8b-instant"
 
